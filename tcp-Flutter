@@ -1,0 +1,112 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Flutter NFC Client',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: MyHomePage(),
+    );
+  }
+}
+
+class MyHomePage extends StatefulWidget {
+  @override
+  _MyHomePageState createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  final TextEditingController _urlController = TextEditingController();
+  final String serverIP = '192.168.0.18'; // 라즈베리파이 서버 IP 주소
+  final int serverPort = 8888;
+
+  Future<void> sendMessage(String mode, {String data = ''}) async {
+    try {
+      // TCP 연결
+      Socket socket = await Socket.connect(serverIP, serverPort);
+
+      // 모드 전송
+      socket.write(mode);
+      await socket.flush();
+
+      // 모드가 "write"인 경우 URL 전송
+      if (mode == 'write') {
+        socket.write(data);
+        await socket.flush();
+      }
+
+      // 서버로부터 응답 수신 대기
+      StringBuffer responseBuffer = StringBuffer();
+      await socket.listen((List<int> event) {
+        String response = String.fromCharCodes(event);
+        responseBuffer.write(response);
+      }).asFuture();
+
+      String response = responseBuffer.toString();
+      print('Server response: $response');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Server response: $response')),
+      );
+
+      socket.close();
+    } catch (e) {
+      print('Error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  void _writeMode() async {
+    String url = _urlController.text;
+    if (url.isNotEmpty) {
+      await sendMessage('write', data: url);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('URL cannot be empty for write mode')),
+      );
+    }
+  }
+
+  void _readMode() async {
+    await sendMessage('read');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Flutter NFC Client'),
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            TextField(
+              controller: _urlController,
+              decoration: InputDecoration(labelText: 'Enter URL to write'),
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _writeMode,
+              child: Text('Write to NFC'),
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _readMode,
+              child: Text('Read from NFC'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
